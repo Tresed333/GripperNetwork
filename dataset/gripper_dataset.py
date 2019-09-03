@@ -1,6 +1,7 @@
 import tensorflow as tf
 from dataset.functions import *
 from algorithms.norms import lerp
+from algorithms.geometry import log_map
 import os
 
 TRAIN_FOLDER = 'train'
@@ -59,10 +60,9 @@ def _load_data(path):
         returnTrans = list()
         returnRot = list()
         for translation in sorted(os.listdir(path)):
-            filePath = os.path.join(path, "trans")
+            filePath = os.path.join(path, translation)
             b = np.loadtxt(filePath, dtype=float)
             rot = b[:3, :3]
-            rot = np.reshape(rot, newshape=(-1))
             trans = b[:3, 3]
             trans = np.reshape(trans, newshape=(-1))
             returnTrans.append(trans)
@@ -76,11 +76,21 @@ def _load_data(path):
     return [rgb, depth, trans, rot]
 
 
+def process(data):
+    rgb, depth, trans, rot = data
+
+    log = log_map(rot)
+
+    params = tf.concat((trans, log), axis=-1)
+    return rgb, depth, trans, rot, params
+
+
 def dictify(data):
-    (rgb, depth, translation, rotation) = data
+    rgb, depth, trans, rot, params = data
     return {
-        'rgb:': rgb,
+        'rgb': rgb,
         'depth': depth,
-        't': translation,
-        'r': rotation
+        't': trans,
+        'r': rot,
+        'params': params
     }
