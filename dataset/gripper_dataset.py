@@ -30,7 +30,7 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
     if not os.path.exists(p):
         return None
 
-    rgb, depth, translation, rotation = _load_data(p)
+    rgb, depth, translation, rotation, bbox = _load_data(p)
 
     count = len(rgb)
 

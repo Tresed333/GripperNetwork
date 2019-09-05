@@ -26,8 +26,8 @@ class GripperNetwork(tf.keras.Model):
         self.max_pool = tf.keras.layers.MaxPool2D()
         self.flatten = tf.keras.layers.Flatten()
 
-    def call(self, rgb, depth, training=None, mask=None):
-        x = tf.concat((rgb, depth), axis=-1)
+    def call(self, rgb, depth, mesh, training=None, mask=None):
+        x = tf.concat((rgb, depth, mesh), axis=-1)
         x = self.c1(x)
         x = self.c2(x)
         x = self.max_pool(x)
@@ -64,22 +64,134 @@ class GripperNetwork(tf.keras.Model):
                          GripperNetwork.MODEL_NAME),
             global_step=step)
 
+class WitpNetwork(tf.keras.Model):
+    MODEL_NAME = 'WitpNetwork'
 
-class GripperModel(tf.keras.Model):
+    def __init__(self, input_dims=(28, 28), checkpoint_directory=None, suffix='', learning_rate=1e-4):
+        super(WitpNetwork, self).__init__()
 
-    def __init__(self, network, learning_rate, *args, **kwargs):
+        self.checkpoint_directory = checkpoint_directory
+        self.suffix = suffix
+
+        self.input_dims = input_dims
+
+        self.e1 = tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
+        self.e2 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
+        self.e3 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
+        self.e4 = tf.keras.layers.Conv2D(64, [3, 3], activation='relu', padding='same')
+        self.e5 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
+        self.e6 = tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
+        self.e7 = tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
+        self.e8 = tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
+        self.e9 = tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
+        self.e10= tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
+
+        self.d1 = tf.keras.layers.Conv2DTranspose(64, [3, 3], activation='relu', padding='same',strides=2)
+        self.d2 = tf.keras.layers.Conv2DTranspose(32, [3, 3], activation='relu', padding='same',strides=2)
+        self.d3 = tf.keras.layers.Conv2DTranspose(16, [3, 3], activation='relu', padding='same',strides=2)
+
+
+    def call(self, rgb, depth, training=None, mask=None):
+        x = tf.concat((rgb, depth), axis=-1)
+        x = self.c1(x)
+        x = self.c2(x)
+        x = self.max_pool(x)
+        x = self.c3(x)
+        x = self.c4(x)
+        x = self.max_pool(x)
+        x = self.c5(x)
+        x = self.c6(x)
+        x = self.max_pool(x)
+        x = self.c7(x)
+        x = self.c8(x)
+        x = self.max_pool(x)
+        x = self.c9(x)
+        x = self.c10(x)
+        x = self.d1(x)
+        x = self.d2(x)
+        x = self.d3(x)
+        x = self.d4(x)
+        x = self.d5(x)
+        return x
+
+    def restore_model(self):
+        """ Function to restore trained model.
+        """
+
+        # self(tf.zeros((1,) + self.input_dims + (3,)), tf.zeros((1,) + self.input_dims + (1,)), training=False)
+        try:
+            saver = tfe.Saver(self.variables)
+            saver.restore(
+                tf.train.latest_checkpoint(
+                    os.path.join(self.checkpoint_directory, GripperNetwork.MODEL_NAME + self.suffix)))
+        except ValueError:
+            print('RotateNet model cannot be found.')
+
+    def save_model(self, step):
+        """ Function to save trained model.
+        """
+        makedirs(os.path.join(self.checkpoint_directory, GripperNetwork.MODEL_NAME))
+        tfe.Saver(
+            self.variables).save(
+            os.path.join(self.checkpoint_directory, GripperNetwork.MODEL_NAME + self.suffix,
+                         GripperNetwork.MODEL_NAME),
+            global_step=step)
+
+
+class WitpModel(tf.keras.Model):
+    def __init__(self, witpNetwork, learning_rate, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.network = network
+        self.witpNetwork = witpNetwork
         self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate)
 
     def call(self, inputs, training=None, mask=None):
         rgb = inputs['rgb']
         depth = inputs['depth']
-
-        out = self.network(rgb, depth, training=training)
+        witpout = self.witpNetwork(rgb, depth, training=training)
 
         return {
-            'params': out
+            'params': witpout
+        }
+
+    def compute_loss(self, inputs, outputs):
+        pred = outputs['mesh']
+        label = inputs['mesh']
+        loss = tf.losses.mean_squared_error(label, pred)
+
+        return {
+            'loss': loss,
+        }
+
+    def optimize(self, losses, tape, global_step=None):
+        def _apply_grads(loss, tape, var, opt, step):
+            grads = tape.gradient(loss, var)
+            opt.apply_gradients(zip(grads, var), global_step=step)
+
+        _apply_grads(losses['loss'], tape,
+                     self.trainable_variables, self.opt, global_step)
+
+    def save_model(self, step):
+        """ Function to save trained model.
+        """
+        self.gripperNetwork.save_model(step)
+
+
+class GripperModel(tf.keras.Model):
+
+    def __init__(self, gripperNetwork, witpNetwork, learning_rate, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.gripperNetwork = gripperNetwork
+        self.witpNetwork = witpNetwork
+        self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate)
+
+    def call(self, inputs, training=None, mask=None):
+        rgb = inputs['rgb']
+        depth = inputs['depth']
+        witpout = self.witpNetwork(rgb, depth, training=training)
+        gripperout = self.gripperNetwork(rgb, depth, witpout, training=training)
+
+        return {
+            'params': gripperout
         }
 
     def compute_loss(self, inputs, outputs):
@@ -102,4 +214,4 @@ class GripperModel(tf.keras.Model):
     def save_model(self, step):
         """ Function to save trained model.
         """
-        self.network.save_model(step)
+        self.witpNetwork.save_model(step)

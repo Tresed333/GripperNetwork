@@ -63,14 +63,32 @@ import numpy as np
 # if __name__ == '__main__':
 #     a = compare_rotation(input, output)
 #     print(a)
+# import os
+# def _load_bbox(path):
+#     returnBbox = list()
+#     for bbox in sorted(os.listdir(path)):
+#         returnBbox.append(os.path.join(path, bbox))
+#     return returnBbox
+
 import os
-def _load_bbox(path):
-    returnBbox = list()
-    for bbox in sorted(os.listdir(path)):
-        returnBbox.append(os.path.join(path, bbox))
-    return returnBbox
+from tensorflow.contrib import eager as tfe
+from system.misc import makedirs
+from algorithms.image import *
+tf.enable_eager_execution()
+import matplotlib.pyplot as plt
 
 if __name__ == '__main__':
-    path = "/home/m320/robot40human_ws/src/data_collector/rgb_bbox"
-    list = _load_bbox(path)
-    print(list)
+    row = 40
+    col = 40
+    mean = 0
+    var = 0.1
+    sigma = var ** 0.5
+    data = np.random.normal(mean,sigma,(1,row,col,1))
+    data = np.abs(data)
+    data = tf.constant(data)
+    d1 = tf.keras.layers.Conv2DTranspose(16, [3, 3], activation='relu', padding='same', strides=2)
+    data = d1(data)
+    data2 = data[0,:,:,0]
+    print('elo',data2)
+    imgplot = plt.imshow(data2.numpy())
+    plt.show()
