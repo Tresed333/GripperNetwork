@@ -44,7 +44,8 @@ class GripperNetwork(tf.keras.Model):
     def restore_model(self):
         """ Function to restore trained model.
         """
-        self(tf.zeros((1,) + self.input_dims() + (3,)), tf.zeros((1,) + self.input_dims() + (1,)), training=False)
+
+        # self(tf.zeros((1,) + self.input_dims + (3,)), tf.zeros((1,) + self.input_dims + (1,)), training=False)
         try:
             saver = tfe.Saver(self.variables)
             saver.restore(
@@ -97,3 +98,8 @@ class GripperModel(tf.keras.Model):
 
         _apply_grads(losses['loss'], tape,
                      self.trainable_variables, self.opt, global_step)
+
+    def save_model(self, step):
+        """ Function to save trained model.
+        """
+        self.network.save_model(step)

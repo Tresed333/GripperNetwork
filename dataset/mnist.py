@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow as tf
 
 
 def get(batch_size, split=0.2):

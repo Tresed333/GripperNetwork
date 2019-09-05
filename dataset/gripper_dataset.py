@@ -18,9 +18,9 @@ def get(dataset_path, batch_size, resize_dims=None, map_range=None):
 
 
 def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None):
-    def _decode_image(image):
+    def _decode_image(image, channels):
         image_string = tf.read_file(image)
-        image_decoded = tf.image.decode_png(image_string, channels=3)
+        image_decoded = tf.image.decode_png(image_string, channels=channels)
         image = tf.cast(image_decoded, tf.float32)
 
         return image
@@ -32,11 +32,13 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
 
     rgb, depth, translation, rotation = _load_data(p)
 
+    count = len(rgb)
+
     rgb = tf.convert_to_tensor(rgb, dtype=tf.string)
     depth = tf.convert_to_tensor(depth, dtype=tf.string)
 
     ds = tf.data.Dataset.from_tensor_slices((rgb, depth, translation, rotation))
-    ds = ds.shuffle(len(rgb)).map(lambda x, y, t, r: [_decode_image(x), _decode_image(y), t, r])
+    ds = ds.shuffle(count).map(lambda x, y, t, r: [_decode_image(x, 3), _decode_image(y, 1), t, r])
     if resize_dims is not None:
         ds = ds.map(
             lambda x, y, t, r: [tf.image.resize_images(x, resize_dims), tf.image.resize_images(y, resize_dims), t, r])
@@ -70,27 +72,35 @@ def _load_data(path):
 
         return returnTrans, returnRot
 
+    def _load_bbox(path):
+        returnBbox = list()
+        for bbox in sorted(os.listdir(path)):
+            returnBbox.append(os.path.join(path, bbox))
+        return returnBbox
+
     rgb = _load_pictures(os.path.join(path, "rgb"))
     depth = _load_pictures(os.path.join(path, "depth"))
     trans, rot = _load_translations(os.path.join(path, "trans"))
-    return [rgb, depth, trans, rot]
+    bbox = _load_bbox(os.path.join(path, "bbox"))
+    return [rgb, depth, trans, rot, bbox]
 
 
 def process(data):
-    rgb, depth, trans, rot = data
+    rgb, depth, trans, rot, bbox = data
 
     log = log_map(rot)
 
     params = tf.concat((trans, log), axis=-1)
-    return rgb, depth, trans, rot, params
+    return rgb, depth, trans, rot, bbox, params
 
 
 def dictify(data):
-    rgb, depth, trans, rot, params = data
+    rgb, depth, trans, rot, bbox, params = data
     return {
         'rgb': rgb,
         'depth': depth,
         't': trans,
         'r': rot,
+        'bbox': bbox,
         'params': params
     }
