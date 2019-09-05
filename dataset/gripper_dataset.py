@@ -5,6 +5,7 @@ from dataset.functions import *
 from algorithms.norms import lerp
 from algorithms.geometry import log_map
 import os
+import numpy as np
 
 TRAIN_FOLDER = 'train'
 VALID_FOLDER = 'val'
@@ -21,7 +22,7 @@ def get(dataset_path, batch_size, resize_dims=None, image_size=None, map_range=N
 
 def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None, map_range=None):
     def _create_map(box, kernel, image_size):
-        image = np.zeros(shape=[500, 500], dtype=np.float32)
+        image = np.zeros(shape=image_size, dtype=np.float32)
 
         tl = box[:2]
         br = box[2:]
@@ -48,15 +49,26 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None
         begin = zeros + begin_cut
         end = kernel_shape - end_cut
 
-        image[int(image_begin[0]):int(image_end[0]), int(image_begin[1]):int(image_end[1])] = kernel[
-                                                                                              int(begin[0]):int(end[0]),
-                                                                                              int(begin[1]):int(end[1])]
+        image_begin = np.array(image_begin).astype(np.int32)
+        image_end = np.array(image_end).astype(np.int32)
+        begin = np.array(begin).astype(np.int32)
+        end = np.array(end).astype(np.int32)
 
+        image_diff = image_end - image_begin
+        kernel_diff = end - begin
+        sd = (image_end - image_begin) - (end - begin)
+
+        try:
+            image[image_begin[0]:image_end[0], image_begin[1]:image_end[1]] = kernel[begin[0]:end[0] + sd[0],
+                                                                              begin[1]:end[1] + sd[1]]
+        except Exception as e:
+            print(e)
+            pass
         return image
 
-    def _decode_image(image):
+    def _decode_image(image, channels=3):
         image_string = tf.read_file(image)
-        image_decoded = tf.image.decode_png(image_string, channels=3)
+        image_decoded = tf.image.decode_png(image_string, channels=channels)
         image = tf.cast(image_decoded, tf.float32)
 
         return image
@@ -96,7 +108,7 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None
 
     kernel_size = [100, 100]
     kernel = gaussian_kernel(std=20.0, size=kernel_size, norm='max')
-
+    kernel = kernel.numpy()
     p = os.path.join(path, folder)
 
     if not os.path.exists(p):
@@ -109,7 +121,7 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None
     maps = [_create_map(box, kernel, image_size) for box in boxes]
 
     ds = tf.data.Dataset.from_tensor_slices((rgb, depth, translation, rotation, maps))
-    ds = ds.shuffle(len(rgb)).map(lambda x, y, t, r, m: [_decode_image(x), _decode_image(y, 1), t, r, m])
+    ds = ds.map(lambda x, y, t, r, m: [_decode_image(x), _decode_image(y, 1), t, r, m])
     ds = ds.map(lambda x, y, t, r, m: [x, y, t, r, m])
 
     if resize_dims is not None:
@@ -147,33 +159,51 @@ def _load_data(path):
         return returnTrans, returnRot
 
     def _load_bbox(path):
+        def _refine(box):
+            x1 = box[0]
+            x2 = box[2]
+            y1 = box[1]
+            y2 = box[3]
+
+            left = x1 if x1 < x2 else x2
+            right = x2 if x1 < x2 else x1
+            top = y1 if y1 < y2 else y2
+            bottom = y2 if y1 < y2 else y1
+
+            return np.array([left, top, right, bottom])
+
         returnBbox = list()
         for bbox in sorted(os.listdir(path)):
-            returnBbox.append(os.path.join(path, bbox))
+            final_path = os.path.join(path, bbox)
+            box = np.loadtxt(final_path)
+            box = np.reshape(box, (-1))
+            box = _refine(box)
+            returnBbox.append(box)
         return returnBbox
 
     rgb = _load_pictures(os.path.join(path, "rgb"))
     depth = _load_pictures(os.path.join(path, "depth"))
     trans, rot = _load_translations(os.path.join(path, "trans"))
-    bbox = _load_bbox(os.path.join(path, 'boxes'))
+    bbox = _load_bbox(os.path.join(path, 'bbox'))
     return [rgb, depth, trans, rot, bbox]
 
 
 def process(data):
-    rgb, depth, trans, rot = data
+    rgb, depth, trans, rot, object_map = data
 
     log = log_map(rot)
 
     params = tf.concat((trans, log), axis=-1)
-    return rgb, depth, trans, rot, params
+    return rgb, depth, trans, rot, params, object_map
 
 
 def dictify(data):
-    rgb, depth, trans, rot, params = data
+    rgb, depth, trans, rot, params, object_map = data
     return {
         'rgb': rgb,
         'depth': depth,
         't': trans,
         'r': rot,
-        'params': params
+        'params': params,
+        'map': object_map
     }
