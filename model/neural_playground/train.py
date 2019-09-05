@@ -9,6 +9,7 @@ from model.neural_playground.network import *
 from algorithms.geometry import *
 from algorithms.progress_bar import *
 
+
 def compare_translation(inputs, outputs):
     in_params = inputs["params"]
     out_params = outputs["params"]
@@ -21,6 +22,7 @@ def compare_translation(inputs, outputs):
     sqrt = tf.sqrt(sums)
     return tf.reduce_mean(sqrt)
 
+
 def compare_rotation(inputs, outputs):
     in_params = inputs["params"]
     out_params = outputs["params"]
@@ -31,7 +33,8 @@ def compare_rotation(inputs, outputs):
     out_rot = exp_map(out_values)
 
     angle = rotation_delta(in_rot, out_rot)
-    return tf.reduce_mean(angle)*180.0/np.pi
+    return tf.reduce_mean(angle) * 180.0 / np.pi
+
 
 class Logs(BaseLogs):
 
@@ -56,7 +59,8 @@ train_step = tf.Variable(0, dtype=tf.int64, trainable=False)
 val_step = tf.Variable(0, dtype=tf.int64, trainable=False)
 global_step = tf.train.get_or_create_global_step()
 
-train_dataset, val_dataset, test_dataset = dataset.get(batch_size=5, dataset_path=path, resize_dims=(320,240), map_range=(0.0,255.0,0.0,1.0))
+train_dataset, val_dataset, test_dataset = dataset.get(batch_size=5, dataset_path=path, resize_dims=(320, 240),
+                                                       map_range=(0.0, 255.0, 0.0, 1.0))
 
 network = GripperNetwork(checkpoint_directory=checkpoint_directory, input_dims=(320, 240))
 
@@ -71,7 +75,7 @@ for e in range(epochs):
     print('Epoch: ', e)
     for step, data in enumerate(train_dataset):
         data = dataset.process(data)
-        data=dataset.dictify(data)
+        data = dataset.dictify(data)
         inputs = data
 
         with tf.GradientTape(persistent=True) as tape:

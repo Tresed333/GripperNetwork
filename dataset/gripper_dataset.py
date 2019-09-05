@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from algorithms.image import coordinates
 from algorithms.tensor import gaussian_kernel
 from dataset.functions import *
 from algorithms.norms import lerp
@@ -12,15 +13,15 @@ VALID_FOLDER = 'val'
 TEST_FOLDER = 'test'
 
 
-def get(dataset_path, batch_size, resize_dims=None, image_size=None, map_range=None):
-    train_dataset = _prepare_dataset(dataset_path, TRAIN_FOLDER, batch_size, resize_dims, image_size, map_range)
-    val_dataset = _prepare_dataset(dataset_path, VALID_FOLDER, batch_size, resize_dims, image_size, map_range)
-    test_dataset = _prepare_dataset(dataset_path, TEST_FOLDER, 1, resize_dims, image_size, map_range=map_range)
+def get(dataset_path, batch_size, resize_dims=None, map_range=None):
+    train_dataset = _prepare_dataset(dataset_path, TRAIN_FOLDER, batch_size, resize_dims, map_range)
+    val_dataset = _prepare_dataset(dataset_path, VALID_FOLDER, batch_size, resize_dims, map_range)
+    test_dataset = _prepare_dataset(dataset_path, TEST_FOLDER, 1, resize_dims, map_range=map_range)
 
     return train_dataset, val_dataset, test_dataset
 
 
-def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None, map_range=None):
+def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None):
     def _create_map(box, kernel, image_size):
         image = np.zeros(shape=image_size, dtype=np.float32)
 
@@ -54,8 +55,6 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None
         begin = np.array(begin).astype(np.int32)
         end = np.array(end).astype(np.int32)
 
-        image_diff = image_end - image_begin
-        kernel_diff = end - begin
         sd = (image_end - image_begin) - (end - begin)
 
         try:
@@ -86,7 +85,7 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None
         image_size = image_shape[:2]
 
         tl_fit = tf.maximum(tl_in_image, zeros)
-        br_fit = tf.minimum(br_in_image, image_shape)
+        br_fit = tf.minimum(br_in_image, tf.cast(image_size, tf.float32))
 
         begin_cut = tl_fit - tl_in_image
         end_cut = br_in_image - br_fit
@@ -97,18 +96,23 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None
         begin = zeros + begin_cut
         end = tf.cast(tf.shape(kernel), tf.float32) - end_cut
 
-        map = tf.Variable(tf.zeros(image_size, dtype=tf.float32))
-
         image_begin = tf.cast(image_begin, tf.int32)
         image_end = tf.cast(image_end, tf.int32)
         begin = tf.cast(begin, tf.int32)
         end = tf.cast(end, tf.int32)
 
-        return tf.expand_dims(map, axis=-1)
+        window_disparity = (image_end - image_begin) - (end - begin)
+
+        kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
+
+        updates = tf.reshape(kernel_slice, shape=[-1])
+        indices = tf.reshape(coordinates(end + window_disparity), shape=(-1, 2)) + tf.cast(center, tf.int32)
+
+        object_map = tf.scatter_nd(indices, updates, image_size)
+        return tf.expand_dims(object_map, axis=-1)
 
     kernel_size = [100, 100]
     kernel = gaussian_kernel(std=20.0, size=kernel_size, norm='max')
-    kernel = kernel.numpy()
     p = os.path.join(path, folder)
 
     if not os.path.exists(p):
@@ -118,16 +122,15 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, image_size=None
 
     rgb = tf.convert_to_tensor(rgb, dtype=tf.string)
     depth = tf.convert_to_tensor(depth, dtype=tf.string)
-    maps = [_create_map(box, kernel, image_size) for box in boxes]
 
-    ds = tf.data.Dataset.from_tensor_slices((rgb, depth, translation, rotation, maps))
-    ds = ds.map(lambda x, y, t, r, m: [_decode_image(x), _decode_image(y, 1), t, r, m])
-    ds = ds.map(lambda x, y, t, r, m: [x, y, t, r, m])
+    ds = tf.data.Dataset.from_tensor_slices((rgb, depth, translation, rotation, boxes))
+    ds = ds.map(lambda x, y, t, r, b: [_decode_image(x), _decode_image(y, 1), t, r, b])
+    ds = ds.map(lambda x, y, t, r, b: [x, y, t, r, _box_to_map(b, kernel, tf.shape(x))])
 
     if resize_dims is not None:
         ds = ds.map(
             lambda x, y, t, r, m: [tf.image.resize_images(x, resize_dims), tf.image.resize_images(y, resize_dims), t, r,
-                                   tf.image.resize_images(tf.expand_dims(m, axis=-1), resize_dims)])
+                                   tf.image.resize_images(m, resize_dims)])
 
     if map_range is not None:
         ds = ds.map(lambda x, y, t, r, m: [lerp(x, *map_range), lerp(y, *map_range), t, r, m])
