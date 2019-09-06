@@ -90,8 +90,11 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
         begin_cut = tl_fit - tl_in_image
         end_cut = br_in_image - br_fit
 
-        image_begin = center - tf.cast(tf.shape(kernel), tf.float32) / 2 + begin_cut
-        image_end = center + tf.cast(tf.shape(kernel), tf.float32) / 2 - end_cut
+        # image_begin = center - tf.cast(tf.shape(kernel), tf.float32) / 2 + begin_cut
+        # image_end = center + tf.cast(tf.shape(kernel), tf.float32) / 2 - end_cut
+
+        image_begin = tl_fit
+        image_end = br_fit
 
         begin = zeros + begin_cut
         end = tf.cast(tf.shape(kernel), tf.float32) - end_cut
@@ -102,11 +105,13 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
         end = tf.cast(end, tf.int32)
 
         window_disparity = (image_end - image_begin) - (end - begin)
-
+        print(window_disparity)
         kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
 
         updates = tf.reshape(kernel_slice, shape=[-1])
-        indices = tf.reshape(coordinates(end + window_disparity), shape=(-1, 2)) + tf.cast(center, tf.int32)
+        tl_fit_inv = tf.squeeze(tf.reverse(tf.expand_dims(tl_fit,axis=0), axis=-1))
+        indices = tf.reshape(coordinates(end - begin + window_disparity), shape=(-1, 2)) + tf.cast(
+            tl_fit_inv, tf.int32)
 
         object_map = tf.scatter_nd(indices, updates, image_size)
         return tf.expand_dims(object_map, axis=-1)
@@ -125,15 +130,16 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
 
     ds = tf.data.Dataset.from_tensor_slices((rgb, depth, translation, rotation, boxes))
     ds = ds.map(lambda x, y, t, r, b: [_decode_image(x), _decode_image(y, 1), t, r, b])
-    ds = ds.map(lambda x, y, t, r, b: [x, y, t, r, _box_to_map(b, kernel, tf.shape(x))])
+    ds = ds.map(lambda x, y, t, r, b: [x, y, t, r, _box_to_map(b, kernel, tf.shape(x)), b])
 
     if resize_dims is not None:
         ds = ds.map(
-            lambda x, y, t, r, m: [tf.image.resize_images(x, resize_dims), tf.image.resize_images(y, resize_dims), t, r,
-                                   tf.image.resize_images(m, resize_dims)])
+            lambda x, y, t, r, m, b: [tf.image.resize_images(x, resize_dims), tf.image.resize_images(y, resize_dims), t,
+                                      r,
+                                      tf.image.resize_images(m, resize_dims), b])
 
     if map_range is not None:
-        ds = ds.map(lambda x, y, t, r, m: [lerp(x, *map_range), lerp(y, *map_range), t, r, m])
+        ds = ds.map(lambda x, y, t, r, m, b: [lerp(x, *map_range), lerp(y, *map_range), t, r, m, b])
 
     ds = ds.batch(batch_size).prefetch(batch_size)
 
@@ -192,21 +198,22 @@ def _load_data(path):
 
 
 def process(data):
-    rgb, depth, trans, rot, object_map = data
+    rgb, depth, trans, rot, object_map, box = data
 
     log = log_map(rot)
 
     params = tf.concat((trans, log), axis=-1)
-    return rgb, depth, trans, rot, params, object_map
+    return rgb, depth, trans, rot, params, object_map, box
 
 
 def dictify(data):
-    rgb, depth, trans, rot, params, object_map = data
+    rgb, depth, trans, rot, params, object_map, box = data
     return {
         'rgb': rgb,
         'depth': depth,
         't': trans,
         'r': rot,
         'params': params,
-        'map': object_map
+        'map': object_map,
+        'box': box
     }

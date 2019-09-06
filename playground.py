@@ -45,8 +45,9 @@ def _box_to_map(box, kernel, image_shape):
     kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
 
     updates = tf.reshape(kernel_slice, shape=[-1])
+    temp = tl_fit.numpy()
     indices = tf.reshape(coordinates(end - begin + window_disparity), shape=(-1, 2)) + tf.cast(
-        tl_fit, tf.int32)
+        (temp[1],temp[0]), tf.int32)
     indices_numpy = indices.numpy()
 
     object_map = tf.scatter_nd(indices, updates, image_size)

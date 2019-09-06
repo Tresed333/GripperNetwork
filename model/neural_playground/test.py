@@ -3,30 +3,32 @@ import tensorflow as tf
 tf.enable_eager_execution()
 from tensorflow.contrib import summary as summary
 from model.summaries import BaseLogs
-import dataset.mnist as dataset
+import dataset.gripper_dataset as dataset
 import matplotlib.pyplot as plt
 import os
-from model.mnist_classifier.network import MnistClassifier
+from model.neural_playground.network import WitpNetwork
+import numpy as np
 
 checkpoint_directory = '../../models/'
-
-train_dataset, val_dataset, test_dataset = dataset.get(batch_size=5)
+path = "/home/m320/robot40human_ws/src/data_collector"
+train_dataset, val_dataset, test_dataset = dataset.get(dataset_path=path, batch_size=5,
+                                                       map_range=[0.0, 255.0, 0.0, 1.0])
 
 # network = RotateNet(checkpoint_directory=checkpoint_directory, suffix='bottle')
 
-model = MnistClassifier(checkpoint_directory=checkpoint_directory)
+# model = MnistClassifier(checkpoint_directory=checkpoint_directory)
 
-model.restore_model()
+# model.restore_model()
 
-for step, data in enumerate(test_dataset):
-    inputs = data
-    image, label = inputs
-    outputs = model(inputs, training=True)
-
-    # 0 0 1 0 -> argmax -> 2
-
-    print('Label: ', label)
-    print('Pred vector:', outputs)
-    print('Pred: ', np.argmax(outputs, axis=1))
-    plt.imshow(image[0])
+for data in test_dataset:
+    data = dataset.process(data)
+    data = dataset.dictify(data)
+    print(data['box'][0])
+    rgb = data["rgb"][0]
+    map = data["map"][0, :, :, 0]
+    plt.imshow(rgb.numpy())
     plt.show()
+
+    plt.imshow(map.numpy())
+    plt.show()
+    pass
