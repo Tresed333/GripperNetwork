@@ -1,3 +1,5 @@
+import sys
+
 import tensorflow as tf
 
 from algorithms.image import coordinates
@@ -83,12 +85,19 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
 
         zeros = tf.zeros([2])
         image_size = image_shape[:2]
+        image_size_reversed = tf.reverse(image_size, axis=[0])
 
         tl_fit = tf.maximum(tl_in_image, zeros)
-        br_fit = tf.minimum(br_in_image, tf.cast(image_size, tf.float32))
+        br_fit = tf.minimum(br_in_image, tf.cast(image_size_reversed, tf.float32))
 
-        begin_cut = tl_fit - tl_in_image
-        end_cut = br_in_image - br_fit
+        # tl_fit_new = tf.minimum(tl_fit, br_fit)
+        # br_fit_new = tf.maximum(tl_fit, br_fit)
+        #
+        # tl_fit = tl_fit_new
+        # br_fit = br_fit_new
+
+        begin_cut = tf.abs(tl_fit - tl_in_image)
+        end_cut = tf.abs(br_in_image - br_fit)
 
         # image_begin = center - tf.cast(tf.shape(kernel), tf.float32) / 2 + begin_cut
         # image_end = center + tf.cast(tf.shape(kernel), tf.float32) / 2 - end_cut
@@ -105,10 +114,15 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
         end = tf.cast(end, tf.int32)
 
         window_disparity = (image_end - image_begin) - (end - begin)
-        print(window_disparity)
         kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
 
-        updates = tf.reshape(kernel_slice, shape=[-1])
+        print_op = tf.print("begin:", begin, 'end', end, 'center', center, 'tl_fit', tl_fit, 'br_fit', br_fit,
+                            'tl_in_image', tl_in_image, 'br_in_image', br_in_image,
+                            'begin_cut', begin_cut, 'end_cut', end_cut, 'image_size', image_size,
+                            output_stream=sys.stdout)
+        with tf.control_dependencies([print_op]):
+            updates = tf.reshape(kernel_slice, shape=[-1])
+
         tl_fit_inv = tf.reverse(tl_fit, axis=[0])
         indices = tf.reshape(coordinates(end - begin + window_disparity), shape=(-1, 2)) + tf.cast(
             tl_fit_inv, tf.int32)

@@ -10,7 +10,7 @@ from model.neural_playground.network import WitpNetwork
 import numpy as np
 
 checkpoint_directory = '../../models/'
-path = "/home/m320/robot40human_ws/src/data_collector"
+path = "/home/rafal/Datasets/tube"
 train_dataset, val_dataset, test_dataset = dataset.get(dataset_path=path, batch_size=5,
                                                        map_range=[0.0, 255.0, 0.0, 1.0])
 
@@ -20,7 +20,7 @@ train_dataset, val_dataset, test_dataset = dataset.get(dataset_path=path, batch_
 
 # model.restore_model()
 
-for data in train_dataset:
+for data in test_dataset:
     data = dataset.process(data)
     data = dataset.dictify(data)
     # print(data['box'][0])
