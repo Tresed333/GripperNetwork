@@ -15,9 +15,9 @@ class Logs(BaseLogs):
 
         with summary.always_record_summaries():
             if step.numpy() % 20 == 0:
-                summary.image('summary/tube',inputs['rgb'],max_images=1,step=step)
-                summary.image('summary/map',inputs['map'],max_images=1,step=step)
-                summary.image('summary/output',outputs['map'],max_images=1,step=step)
+                summary.image('summary/tube', inputs['rgb'], max_images=1, step=step)
+                summary.image('summary/map', inputs['map'], max_images=1, step=step)
+                summary.image('summary/output', outputs['map'], max_images=1, step=step)
                 summary.scalar('summary/loss', losses['loss'], step=step)
 
 
@@ -32,8 +32,8 @@ train_step = tf.Variable(0, dtype=tf.int64, trainable=False)
 val_step = tf.Variable(0, dtype=tf.int64, trainable=False)
 global_step = tf.train.get_or_create_global_step()
 
-train_dataset, val_dataset, test_dataset = dataset.get(batch_size=5, dataset_path=path, resize_dims=(320, 240),
-                                                       map_range=(0.0, 255.0, 0.0, 1.0), kernel_size=(200,200))
+train_dataset, val_dataset, test_dataset = dataset.get(batch_size=5, dataset_path=path, resize_dims=(240, 320),
+                                                       map_range=(0.0, 255.0, 0.0, 1.0), kernel_size=(200, 200))
 
 network = WitpNetwork(checkpoint_directory=checkpoint_directory, input_dims=(320, 240))
 

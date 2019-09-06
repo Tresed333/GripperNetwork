@@ -13,18 +13,18 @@ import numpy as np
 TRAIN_FOLDER = 'train'
 VALID_FOLDER = 'val'
 TEST_FOLDER = 'test'
+240
 
 
-def get(dataset_path, batch_size, resize_dims=None, map_range=None, kernel_size=(200,200)):
+def get(dataset_path, batch_size, resize_dims=None, map_range=None, kernel_size=(200, 200)):
     train_dataset = _prepare_dataset(dataset_path, TRAIN_FOLDER, batch_size, resize_dims, map_range, kernel_size)
-    val_dataset = _prepare_dataset(dataset_path, VALID_FOLDER, batch_size, resize_dims, map_range,kernel_size)
-    test_dataset = _prepare_dataset(dataset_path, TEST_FOLDER, 1, resize_dims,map_range,kernel_size)
+    val_dataset = _prepare_dataset(dataset_path, VALID_FOLDER, batch_size, resize_dims, map_range, kernel_size)
+    test_dataset = _prepare_dataset(dataset_path, TEST_FOLDER, 1, resize_dims, map_range, kernel_size)
 
     return train_dataset, val_dataset, test_dataset
 
 
 def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None, kernel_size=None):
-
     def _decode_image(image, channels=3):
         image_string = tf.read_file(image)
         image_decoded = tf.image.decode_png(image_string, channels=channels)
@@ -48,17 +48,8 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None,
         tl_fit = tf.maximum(tl_in_image, zeros)
         br_fit = tf.minimum(br_in_image, tf.cast(image_size_reversed, tf.float32))
 
-        # tl_fit_new = tf.minimum(tl_fit, br_fit)
-        # br_fit_new = tf.maximum(tl_fit, br_fit)
-        #
-        # tl_fit = tl_fit_new
-        # br_fit = br_fit_new
-
         begin_cut = tf.abs(tl_fit - tl_in_image)
         end_cut = tf.abs(br_in_image - br_fit)
-
-        # image_begin = center - tf.cast(tf.shape(kernel), tf.float32) / 2 + begin_cut
-        # image_end = center + tf.cast(tf.shape(kernel), tf.float32) / 2 - end_cut
 
         image_begin = tl_fit
         image_end = br_fit
@@ -74,7 +65,6 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None,
         window_disparity = (image_end - image_begin) - (end - begin)
         kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
 
-
         updates = tf.reshape(kernel_slice, shape=[-1])
 
         tl_fit_inv = tf.reverse(tl_fit, axis=[0])
@@ -84,7 +74,7 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None,
         object_map = tf.scatter_nd(indices, updates, image_size)
         return tf.expand_dims(object_map, axis=-1)
 
-    kernel = gaussian_kernel(std=kernel_size[0]/5.0, size=kernel_size, norm='max')
+    kernel = gaussian_kernel(std=kernel_size[0] / 5.0, size=kernel_size, norm='max')
     p = os.path.join(path, folder)
 
     if not os.path.exists(p):
