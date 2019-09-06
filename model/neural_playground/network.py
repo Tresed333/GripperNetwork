@@ -64,6 +64,49 @@ class GripperNetwork(tf.keras.Model):
                          GripperNetwork.MODEL_NAME),
             global_step=step)
 
+class GripperModel(tf.keras.Model):
+
+    def __init__(self, gripperNetwork, witpNetwork, learning_rate, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.gripperNetwork = gripperNetwork
+        self.witpNetwork = witpNetwork
+        self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate)
+
+    def call(self, inputs, training=None, mask=None):
+        rgb = inputs['rgb']
+        depth = inputs['depth']
+        witpout = self.witpNetwork(rgb, depth, training=training)
+        gripperout = self.gripperNetwork(rgb, depth, witpout, training=training)
+
+        return {
+            'params': gripperout
+        }
+
+    def compute_loss(self, inputs, outputs):
+        pred = outputs['params']
+        label = inputs["params"]
+        loss = tf.losses.mean_squared_error(label, pred)
+
+        return {
+            'loss': loss,
+        }
+
+    def optimize(self, losses, tape, global_step=None):
+        def _apply_grads(loss, tape, var, opt, step):
+            grads = tape.gradient(loss, var)
+            opt.apply_gradients(zip(grads, var), global_step=step)
+
+        _apply_grads(losses['loss'], tape,
+                     self.trainable_variables, self.opt, global_step)
+
+    def save_model(self, step):
+        """ Function to save trained model.
+        """
+        self.witpNetwork.save_model(step)
+
+
+
+
 class WitpNetwork(tf.keras.Model):
     MODEL_NAME = 'WitpNetwork'
 
@@ -154,8 +197,8 @@ class WitpModel(tf.keras.Model):
         }
 
     def compute_loss(self, inputs, outputs):
-        pred = outputs['mesh']
-        label = inputs['mesh']
+        pred = outputs['map']
+        label = inputs['map']
         loss = tf.losses.mean_squared_error(label, pred)
 
         return {
@@ -174,44 +217,3 @@ class WitpModel(tf.keras.Model):
         """ Function to save trained model.
         """
         self.gripperNetwork.save_model(step)
-
-
-class GripperModel(tf.keras.Model):
-
-    def __init__(self, gripperNetwork, witpNetwork, learning_rate, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.gripperNetwork = gripperNetwork
-        self.witpNetwork = witpNetwork
-        self.opt = tf.train.AdamOptimizer(learning_rate=learning_rate)
-
-    def call(self, inputs, training=None, mask=None):
-        rgb = inputs['rgb']
-        depth = inputs['depth']
-        witpout = self.witpNetwork(rgb, depth, training=training)
-        gripperout = self.gripperNetwork(rgb, depth, witpout, training=training)
-
-        return {
-            'params': gripperout
-        }
-
-    def compute_loss(self, inputs, outputs):
-        pred = outputs['params']
-        label = inputs["params"]
-        loss = tf.losses.mean_squared_error(label, pred)
-
-        return {
-            'loss': loss,
-        }
-
-    def optimize(self, losses, tape, global_step=None):
-        def _apply_grads(loss, tape, var, opt, step):
-            grads = tape.gradient(loss, var)
-            opt.apply_gradients(zip(grads, var), global_step=step)
-
-        _apply_grads(losses['loss'], tape,
-                     self.trainable_variables, self.opt, global_step)
-
-    def save_model(self, step):
-        """ Function to save trained model.
-        """
-        self.witpNetwork.save_model(step)

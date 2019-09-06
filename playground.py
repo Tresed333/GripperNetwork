@@ -26,8 +26,11 @@ def _box_to_map(box, kernel, image_shape):
     begin_cut = tl_fit - tl_in_image
     end_cut = br_in_image - br_fit
 
-    image_begin = center - tf.cast(tf.shape(kernel), tf.float32) / 2 + begin_cut
-    image_end = center + tf.cast(tf.shape(kernel), tf.float32) / 2 - end_cut
+    # image_begin = center - tf.cast(tf.shape(kernel), tf.float32) / 2 + begin_cut
+    # image_end = center + tf.cast(tf.shape(kernel), tf.float32) / 2 - end_cut
+
+    image_begin = tl_fit
+    image_end = br_fit
 
     begin = zeros + begin_cut
     end = tf.cast(tf.shape(kernel), tf.float32) - end_cut
@@ -38,24 +41,26 @@ def _box_to_map(box, kernel, image_shape):
     end = tf.cast(end, tf.int32)
 
     window_disparity = (image_end - image_begin) - (end - begin)
-
+    print(window_disparity)
     kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
 
     updates = tf.reshape(kernel_slice, shape=[-1])
-    indices = tf.reshape(coordinates(end + window_disparity), shape=(-1, 2)) + tf.cast(center, tf.int32)
+    indices = tf.reshape(coordinates(end - begin + window_disparity), shape=(-1, 2)) + tf.cast(
+        tl_fit, tf.int32)
+    indices_numpy = indices.numpy()
 
     object_map = tf.scatter_nd(indices, updates, image_size)
 
     return object_map
 
 
-box = tf.constant([400, 400, 500, 500], dtype=tf.float32)
+box = tf.constant([400, 450, 450, 500], dtype=tf.float32)
 kernel_size = [100, 100]
 kernel = gaussian_kernel(std=20.0, size=kernel_size, norm='max')
 image_shape = tf.constant([500, 500, 3], dtype=tf.int32)
 
 maps = _box_to_map(box, kernel, image_shape)
-plt.imshow(maps.numpy())
+plt.imshow(maps.numpy(), cmap='nipy_spectral')
 plt.show()
 pass
 
