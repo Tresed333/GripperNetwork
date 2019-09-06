@@ -55,10 +55,10 @@ def _box_to_map(box, kernel, image_shape):
     return object_map
 
 
-box = tf.constant([0, 0, 50, 50], dtype=tf.float32)
+box = tf.constant([209, 539, 209, 539], dtype=tf.float32)
 kernel_size = [100, 100]
 kernel = gaussian_kernel(std=20.0, size=kernel_size, norm='max')
-image_shape = tf.constant([500, 500, 3], dtype=tf.int32)
+image_shape = tf.constant([640, 480, 3], dtype=tf.int32)
 
 maps = _box_to_map(box, kernel, image_shape)
 plt.imshow(maps.numpy(), cmap='nipy_spectral')

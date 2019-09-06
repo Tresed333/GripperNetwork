@@ -15,13 +15,16 @@ class Logs(BaseLogs):
 
         with summary.always_record_summaries():
             if step.numpy() % 20 == 0:
+                summary.image('summary/tube',inputs['rgb'],max_images=1,step=step)
+                summary.image('summary/map',inputs['map'],max_images=1,step=step)
+                summary.image('summary/output',outputs['map'],max_images=1,step=step)
                 summary.scalar('summary/loss', losses['loss'], step=step)
 
 
 checkpoint_directory = '../../models/'
 log_directory = '../../logs/WitpNetwork/'
 
-epochs = 200
+epochs = 1000
 lr = 1e-4
 path = "/home/m320/robot40human_ws/src/data_collector"
 
@@ -30,7 +33,7 @@ val_step = tf.Variable(0, dtype=tf.int64, trainable=False)
 global_step = tf.train.get_or_create_global_step()
 
 train_dataset, val_dataset, test_dataset = dataset.get(batch_size=5, dataset_path=path, resize_dims=(320, 240),
-                                                       map_range=(0.0, 255.0, 0.0, 1.0))
+                                                       map_range=(0.0, 255.0, 0.0, 1.0), kernel_size=(200,200))
 
 network = WitpNetwork(checkpoint_directory=checkpoint_directory, input_dims=(320, 240))
 
@@ -55,7 +58,9 @@ for e in range(epochs):
 
         train_logs.summary(inputs, outputs, losses, train_step)
         train_step = train_step + 1
-    model.save_model(e)
+
+    if e % 10 == 1:
+        model.save_model(e)
 
     if test_dataset is not None:
         for step, data in enumerate(test_dataset):

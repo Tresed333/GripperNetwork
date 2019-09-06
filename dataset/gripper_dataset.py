@@ -15,57 +15,15 @@ VALID_FOLDER = 'val'
 TEST_FOLDER = 'test'
 
 
-def get(dataset_path, batch_size, resize_dims=None, map_range=None):
-    train_dataset = _prepare_dataset(dataset_path, TRAIN_FOLDER, batch_size, resize_dims, map_range)
-    val_dataset = _prepare_dataset(dataset_path, VALID_FOLDER, batch_size, resize_dims, map_range)
-    test_dataset = _prepare_dataset(dataset_path, TEST_FOLDER, 1, resize_dims, map_range=map_range)
+def get(dataset_path, batch_size, resize_dims=None, map_range=None, kernel_size=(200,200)):
+    train_dataset = _prepare_dataset(dataset_path, TRAIN_FOLDER, batch_size, resize_dims, map_range, kernel_size)
+    val_dataset = _prepare_dataset(dataset_path, VALID_FOLDER, batch_size, resize_dims, map_range,kernel_size)
+    test_dataset = _prepare_dataset(dataset_path, TEST_FOLDER, 1, resize_dims,map_range,kernel_size)
 
     return train_dataset, val_dataset, test_dataset
 
 
-def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None):
-    def _create_map(box, kernel, image_size):
-        image = np.zeros(shape=image_size, dtype=np.float32)
-
-        tl = box[:2]
-        br = box[2:]
-
-        kernel_shape = np.array(np.shape(kernel)).astype(np.float32)
-
-        center = (tl + br) / 2
-
-        tl_in_image = center - kernel_shape / 2
-        br_in_image = tl_in_image + kernel_shape
-
-        zeros = np.array([0.0, 0.0])
-        image_size = image_size[:2]
-
-        tl_fit = np.maximum(tl_in_image, zeros)
-        br_fit = np.minimum(br_in_image, image_size)
-
-        begin_cut = tl_fit - tl_in_image
-        end_cut = br_in_image - br_fit
-
-        image_begin = center - kernel_shape / 2 + begin_cut
-        image_end = center + kernel_shape / 2 - end_cut
-
-        begin = zeros + begin_cut
-        end = kernel_shape - end_cut
-
-        image_begin = np.array(image_begin).astype(np.int32)
-        image_end = np.array(image_end).astype(np.int32)
-        begin = np.array(begin).astype(np.int32)
-        end = np.array(end).astype(np.int32)
-
-        sd = (image_end - image_begin) - (end - begin)
-
-        try:
-            image[image_begin[0]:image_end[0], image_begin[1]:image_end[1]] = kernel[begin[0]:end[0] + sd[0],
-                                                                              begin[1]:end[1] + sd[1]]
-        except Exception as e:
-            print(e)
-            pass
-        return image
+def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None, kernel_size=None):
 
     def _decode_image(image, channels=3):
         image_string = tf.read_file(image)
@@ -116,12 +74,8 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
         window_disparity = (image_end - image_begin) - (end - begin)
         kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
 
-        print_op = tf.print("begin:", begin, 'end', end, 'center', center, 'tl_fit', tl_fit, 'br_fit', br_fit,
-                            'tl_in_image', tl_in_image, 'br_in_image', br_in_image,
-                            'begin_cut', begin_cut, 'end_cut', end_cut, 'image_size', image_size,
-                            output_stream=sys.stdout)
-        with tf.control_dependencies([print_op]):
-            updates = tf.reshape(kernel_slice, shape=[-1])
+
+        updates = tf.reshape(kernel_slice, shape=[-1])
 
         tl_fit_inv = tf.reverse(tl_fit, axis=[0])
         indices = tf.reshape(coordinates(end - begin + window_disparity), shape=(-1, 2)) + tf.cast(
@@ -130,8 +84,7 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
         object_map = tf.scatter_nd(indices, updates, image_size)
         return tf.expand_dims(object_map, axis=-1)
 
-    kernel_size = [100, 100]
-    kernel = gaussian_kernel(std=20.0, size=kernel_size, norm='max')
+    kernel = gaussian_kernel(std=kernel_size[0]/5.0, size=kernel_size, norm='max')
     p = os.path.join(path, folder)
 
     if not os.path.exists(p):
