@@ -109,7 +109,7 @@ def _prepare_dataset(path, folder, batch_size, resize_dims=None, map_range=None)
         kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
 
         updates = tf.reshape(kernel_slice, shape=[-1])
-        tl_fit_inv = tf.squeeze(tf.reverse(tf.expand_dims(tl_fit,axis=0), axis=-1))
+        tl_fit_inv = tf.reverse(tl_fit, axis=[0])
         indices = tf.reshape(coordinates(end - begin + window_disparity), shape=(-1, 2)) + tf.cast(
             tl_fit_inv, tf.int32)
 

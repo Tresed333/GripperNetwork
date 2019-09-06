@@ -20,15 +20,15 @@ train_dataset, val_dataset, test_dataset = dataset.get(dataset_path=path, batch_
 
 # model.restore_model()
 
-for data in test_dataset:
+for data in train_dataset:
     data = dataset.process(data)
     data = dataset.dictify(data)
-    print(data['box'][0])
-    rgb = data["rgb"][0]
-    map = data["map"][0, :, :, 0]
-    plt.imshow(rgb.numpy())
-    plt.show()
-
-    plt.imshow(map.numpy())
-    plt.show()
+    # print(data['box'][0])
+    # rgb = data["rgb"][0]
+    # map = data["map"][0, :, :, 0]
+    # plt.imshow(rgb.numpy())
+    # plt.show()
+    #
+    # plt.imshow(map.numpy())
+    # plt.show()
     pass
