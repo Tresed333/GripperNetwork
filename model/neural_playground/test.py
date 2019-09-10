@@ -14,10 +14,10 @@ path = "/home/m320/robot40human_ws/src/data_collector"
 train_dataset, val_dataset, test_dataset = dataset.get(dataset_path=path, batch_size=5,
                                                        map_range=[0.0, 255.0, 0.0, 1.0])
 
-# network = RotateNet(checkpoint_directory=checkpoint_directory, suffix='bottle')
-
+# network = WitpNetwork(checkpoint_directory=checkpoint_directory, suffix='bottle')
+#
 # model = MnistClassifier(checkpoint_directory=checkpoint_directory)
-
+#
 # model.restore_model()
 
 for data in test_dataset:

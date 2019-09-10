@@ -62,14 +62,17 @@ global_step = tf.train.get_or_create_global_step()
 train_dataset, val_dataset, test_dataset = dataset.get(batch_size=5, dataset_path=path, resize_dims=(320, 240),
                                                        map_range=(0.0, 255.0, 0.0, 1.0))
 
+
+network2 = WitpNetwork(checkpoint_directory=checkpoint_directory, input_dims=(320, 240))
+network2.restore_model()
 network = GripperNetwork(checkpoint_directory=checkpoint_directory, input_dims=(320, 240))
 
-model = GripperModel(learning_rate=lr, network=network)
+model = GripperModel(learning_rate=lr, gripperNetwork=network, witpNetwork=network2)
 
 train_logs = Logs(os.path.join(log_directory, 'train'))
 val_logs = Logs(os.path.join(log_directory, 'val'))
 
-network.restore_model()
+#network.restore_model()
 
 for e in range(epochs):
     print('Epoch: ', e)
@@ -85,7 +88,8 @@ for e in range(epochs):
 
         train_logs.summary(inputs, outputs, losses, train_step)
         train_step = train_step + 1
-    model.save_model(e)
+    if e%10==9:
+        model.save_model(e)
 
     if test_dataset is not None:
         for step, data in enumerate(test_dataset):

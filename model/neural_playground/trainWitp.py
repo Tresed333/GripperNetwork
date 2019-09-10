@@ -59,8 +59,7 @@ for e in range(epochs):
         train_logs.summary(inputs, outputs, losses, train_step)
         train_step = train_step + 1
 
-    if e % 10 == 1:
-        model.save_model(e)
+    model.save_model(e)
 
     if test_dataset is not None:
         for step, data in enumerate(test_dataset):

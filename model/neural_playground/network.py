@@ -2,7 +2,8 @@ import os
 from tensorflow.contrib import eager as tfe
 from system.misc import makedirs
 from algorithms.image import *
-
+import matplotlib.pyplot as plt
+import numpy as np
 
 class GripperNetwork(tf.keras.Model):
     MODEL_NAME = 'GripperNetwork'
@@ -18,16 +19,20 @@ class GripperNetwork(tf.keras.Model):
         self.c1 = tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
         self.c2 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
         self.c3 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
-        self.c4 = tf.keras.layers.Conv2D(64, [3, 3], activation='relu', padding='same')
-        self.c5 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
-        self.c6 = tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
+        self.c4 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
+        self.c5 = tf.keras.layers.Conv2D(64, [3, 3], activation='relu', padding='same')
+        self.c6 = tf.keras.layers.Conv2D(64, [3, 3], activation='relu', padding='same')
+        self.c7 = tf.keras.layers.Conv2D(64, [3, 3], activation='relu', padding='same')
+        self.c8 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
+        self.c9 = tf.keras.layers.Conv2D(32, [3, 3], activation='relu', padding='same')
+        self.c10 = tf.keras.layers.Conv2D(16, [3, 3], activation='relu', padding='same')
         self.dense_conv = tf.keras.layers.Dense(128)
         self.dense_out = tf.keras.layers.Dense(6)
         self.max_pool = tf.keras.layers.MaxPool2D()
         self.flatten = tf.keras.layers.Flatten()
 
-    def call(self, rgb, depth, mesh, training=None, mask=None):
-        x = tf.concat((rgb, depth, mesh), axis=-1)
+    def call(self, rgb, depth, map, training=None, mask=None):
+        x = tf.concat((rgb, depth, map), axis=-1)
         x = self.c1(x)
         x = self.c2(x)
         x = self.max_pool(x)
@@ -52,7 +57,7 @@ class GripperNetwork(tf.keras.Model):
                 tf.train.latest_checkpoint(
                     os.path.join(self.checkpoint_directory, GripperNetwork.MODEL_NAME + self.suffix)))
         except ValueError:
-            print('RotateNet model cannot be found.')
+            print('Gripper model cannot be found.')
 
     def save_model(self, step):
         """ Function to save trained model.
@@ -75,8 +80,8 @@ class GripperModel(tf.keras.Model):
     def call(self, inputs, training=None, mask=None):
         rgb = inputs['rgb']
         depth = inputs['depth']
-        witpout = self.witpNetwork(rgb, depth, training=training)
-        gripperout = self.gripperNetwork(rgb, depth, witpout, training=training)
+        map = self.witpNetwork(rgb, depth, training=training)
+        gripperout = self.gripperNetwork(rgb, depth, map, training=training)
 
         return {
             'params': gripperout
@@ -102,7 +107,7 @@ class GripperModel(tf.keras.Model):
     def save_model(self, step):
         """ Function to save trained model.
         """
-        self.witpNetwork.save_model(step)
+        self.gripperNetwork.save_model(step)
 
 
 
@@ -172,7 +177,7 @@ class WitpNetwork(tf.keras.Model):
                 tf.train.latest_checkpoint(
                     os.path.join(self.checkpoint_directory, WitpNetwork.MODEL_NAME + self.suffix)))
         except ValueError:
-            print('RotateNet model cannot be found.')
+            print('Witp model cannot be found.')
 
     def save_model(self, step):
         """ Function to save trained model.
