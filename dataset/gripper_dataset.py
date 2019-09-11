@@ -3,7 +3,7 @@ import sys
 import tensorflow as tf
 
 from algorithms.image import coordinates
-from algorithms.tensor import gaussian_kernel
+from algorithms.tensor import gaussian_kernel, vals_to_space, space_to_maps, conv_kernel_3d
 from dataset.functions import *
 from algorithms.norms import lerp
 from algorithms.geometry import log_map
@@ -13,7 +13,8 @@ import numpy as np
 TRAIN_FOLDER = 'train'
 VALID_FOLDER = 'val'
 TEST_FOLDER = 'test'
-240
+
+kernel_3d = gaussian_kernel(size=[7, 7, 7, 1, 1], norm='max')
 
 
 def get(dataset_path, batch_size, resize_dims=None, map_range=None, kernel_size=(200, 200)):
@@ -155,16 +156,31 @@ def _load_data(path):
 
 
 def process(data):
-    rgb, depth, trans, rot, object_map, box = data
+    def _maps_from_params(params, min_val, max_val):
+        params = tf.expand_dims(params, axis=1)
 
-    log = log_map(rot)
+        space_batch = []
+        for p in params:
+            space = vals_to_space(p, [1.0], min_val=min_val, max_val=max_val, out_shape=[400, 400, 400])
+            space_batch.append(space)
+
+        space_blurred = tf.squeeze(conv_kernel_3d(tf.expand_dims(space_batch, axis=-1), kernel_3d), axis=-1)
+        maps = space_to_maps(space_blurred)
+        return maps
+
+    rgb, depth, trans, rot, object_map, box = data
+    # N 3
+    log = tf.cast(log_map(rot), tf.float32)
+    trans = tf.cast(tf.clip_by_value(trans, -1.0, 1.0), tf.float32)
+    rot_maps = _maps_from_params(log, -np.pi, np.pi)
+    trans_maps = _maps_from_params(trans, -1.0, 1.0)
 
     params = tf.concat((trans, log), axis=-1)
-    return rgb, depth, trans, rot, params, object_map, box
+    return rgb, depth, trans, rot, params, object_map, box, rot_maps, trans_maps
 
 
 def dictify(data):
-    rgb, depth, trans, rot, params, object_map, box = data
+    rgb, depth, trans, rot, params, object_map, box, rot_maps, trans_maps = data
     return {
         'rgb': rgb,
         'depth': depth,
@@ -172,5 +188,8 @@ def dictify(data):
         'r': rot,
         'params': params,
         'map': object_map,
-        'box': box
+        'box': box,
+        'rot_maps': rot_maps,
+        'trans_maps': trans_maps
+
     }

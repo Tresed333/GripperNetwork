@@ -1,80 +1,53 @@
 import tensorflow as tf
 
 tf.enable_eager_execution()
-
-import matplotlib.pyplot as plt
+import dataset.gripper_dataset as dataset
 
 from algorithms.image import coordinates
-from algorithms.tensor import gaussian_kernel
+from algorithms.tensor import gaussian_kernel, vals_to_space, conv_kernel_3d, space_to_maps
+from dataset.functions import *
+from algorithms.norms import lerp
+from algorithms.geometry import log_map
+import os
+import numpy as np
+import matplotlib.pyplot as plt
 
+path = "/home/m320/robot40human_ws/src/data_collector"
 
-def _box_to_map(box, kernel, image_shape):
-    tl = tf.cast(box[:2], tf.float32)
-    br = tf.cast(box[2:], tf.float32)
-
-    center = (tl + br) / 2
-
-    tl_in_image = center - tf.cast(tf.shape(kernel), tf.float32) / 2
-    br_in_image = tl_in_image + tf.cast(tf.shape(kernel), tf.float32)
-
-    zeros = tf.zeros([2])
-    image_size = image_shape[:2]
-
-    tl_fit = tf.maximum(tl_in_image, zeros)
-    br_fit = tf.minimum(br_in_image, tf.cast(image_size, tf.float32))
-
-    begin_cut = tl_fit - tl_in_image
-    end_cut = br_in_image - br_fit
-
-    # image_begin = center - tf.cast(tf.shape(kernel), tf.float32) / 2 + begin_cut
-    # image_end = center + tf.cast(tf.shape(kernel), tf.float32) / 2 - end_cut
-
-    image_begin = tl_fit
-    image_end = br_fit
-
-    begin = zeros + begin_cut
-    end = tf.cast(tf.shape(kernel), tf.float32) - end_cut
-
-    image_begin = tf.cast(image_begin, tf.int32)
-    image_end = tf.cast(image_end, tf.int32)
-    begin = tf.cast(begin, tf.int32)
-    end = tf.cast(end, tf.int32)
-
-    window_disparity = (image_end - image_begin) - (end - begin)
-    print(window_disparity)
-    kernel_slice = tf.slice(kernel, begin, end - begin + window_disparity)
-
-    updates = tf.reshape(kernel_slice, shape=[-1])
-    temp = tl_fit.numpy()
-    indices = tf.reshape(coordinates(end - begin + window_disparity), shape=(-1, 2)) + tf.cast(
-        (temp[1],temp[0]), tf.int32)
-    indices_numpy = indices.numpy()
-
-    object_map = tf.scatter_nd(indices, updates, image_size)
-
-    return object_map
-
-
-box = tf.constant([209, 539, 209, 539], dtype=tf.float32)
-kernel_size = [100, 100]
-kernel = gaussian_kernel(std=20.0, size=kernel_size, norm='max')
-image_shape = tf.constant([640, 480, 3], dtype=tf.int32)
-
-maps = _box_to_map(box, kernel, image_shape)
-plt.imshow(maps.numpy(), cmap='nipy_spectral')
-plt.show()
-pass
-
+# rot = [np.eye(3)]
+# rot = tf.Variable(rot)
+# log = tf.cast(log_map(rot), tf.float32)
+# space = vals_to_space(log, [1.0], min_val=-np.pi, max_val=np.pi, out_shape=[64, 64, 64])
+# maps = space_to_maps(tf.expand_dims(space, axis=0))
 #
-# def tridiagonal(diag, sub, sup):
-#     n = tf.shape(diag)[0]
-#     r = tf.range(n)
-#     ii = tf.concat([r, r[1:], r[:-1]], axis=0)
-#     jj = tf.concat([r, r[:-1], r[1:]], axis=0)
-#     idx = tf.stack([ii, jj], axis=1)
-#     values = tf.concat([diag, sub, sup], axis=0)
-#     return tf.scatter_nd(idx, values, [n, n])
-#
-#
-# out = tridiagonal([1.0, 1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0])
-# print(out)
+# plt.imshow(maps.numpy()[0])
+# plt.show()
+
+# return {
+#         'rgb': rgb,
+#         'depth': depth,
+#         't': trans,
+#         'r': rot,
+#         'params': params,
+#         'map': object_map,
+#         'box': box,
+#         'rot_maps': rot_maps
+#     }
+
+train_dataset, val_dataset, test_dataset = dataset.get(batch_size=1, dataset_path=path, resize_dims=(320, 240),
+                                                       map_range=(0.0, 255.0, 0.0, 1.0))
+
+for step, data in enumerate(train_dataset):
+    data = dataset.process(data)
+    data = dataset.dictify(data)
+
+    trans_maps = data['trans_maps'].numpy()[0]
+    params = data['params'].numpy()[0]
+    print(params)
+
+    plt.imshow(trans_maps[:, :, 0])
+    plt.show()
+    plt.imshow(trans_maps[:, :, 1])
+    plt.show()
+    plt.imshow(trans_maps[:, :, 2])
+    plt.show()
